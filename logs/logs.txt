@@ -1,0 +1,9 @@
+2026-03-21 10:15:01,123 : ERROR : [risk.cpp : 10] : Position limit exceeded
+2026-03-21 10:15:02,456 : INFO : [engine.cpp : 20] : Order received
+2026-03-21 10:15:03,789 : ERROR : [risk.cpp : 11] : Position limit exceeded again
+2026-03-21 10:15:04,111 : WARNING : [feed.cpp : 30] : Delayed market data
+2026-03-21 10:15:05,222 : ERROR : [risk.cpp : 12] : Hard breach detected
+2026-03-21 10:15:06,333 : INFO : [engine.cpp : 21] : Order filled
+2026-03-21 10:15:07,444 : CRITICAL : [monitor.cpp : 5] : System overload
+2026-03-21 10:15:10,000 : ERROR : [risk.cpp : 20] : New breach detected
+2026-03-21 10:15:11,000 : INFO : [engine.cpp : 30] : Recovery started
