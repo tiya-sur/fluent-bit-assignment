@@ -354,14 +354,14 @@ With the server stopped, the plugin logs each failed attempt and retries `retry_
 ## Screenshots
 
 ###  stdout test showing count incrementing
-![Fluent Bit](screenshots/fluent_bit_1.jpeg)
+![Fluent Bit](screenshots/fluent_bit_1.png)
 
 ---
 
 ### HTTP test showing batch + collapsing 
-![Stdout Output](screenshots/fluent_bit_2.jpeg)
+![Stdout Output](screenshots/fluent_bit_2.png)
 
 ---
 
 ### Both plugins listed:
-![HTTP Output](screenshots/fluent_bit_3.jpeg)
+![HTTP Output](screenshots/fluent_bit_3.png)
