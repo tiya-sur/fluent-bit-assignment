@@ -351,24 +351,17 @@ With the server stopped, the plugin logs each failed attempt and retries `retry_
 
 ---
 
-## Minimum Success Criteria Checklist
+## Screenshots
 
-- [x] Fluent Bit reads logs from file
-- [x] Parser extracts `time`, `level`, `file`, `line`, `message`
-- [x] Two parsers supported — custom regex format and JSON format
-- [x] Config-level filter drops DEBUG records before they reach the plugin
-- [x] stdout shows correctly parsed and enriched records (Phase 5 validated first)
-- [x] `count` field added to each record by C filter plugin
-- [x] `count` increments correctly and independently per level
-- [x] `UNKNOWN` used for missing or unrecognised levels
-- [x] Local HTTP server receives enriched payloads
-- [x] Multiple records batched into one HTTP request (Doc 2)
-- [x] Same-key alerts collapsed to latest record using composite key (Doc 2)
-- [x] Flush by count threshold (Doc 2)
-- [x] Flush by timeout threshold (Doc 2)
-- [x] Retry on HTTP failure with clear logging (Doc 2)
-- [x] Shutdown flush of remaining records (Doc 2)
-- [x] All logic runs inside Fluent Bit process as C plugins
-- [x] No separate middleware process
-- [x] `output_key` is configurable — Phase 8 bonus feature
-- [x] README explains how to run everything
+###  stdout test showing count incrementing
+![Fluent Bit](screenshots/fluent_bit_1.jpeg)
+
+---
+
+### HTTP test showing batch + collapsing 
+![Stdout Output](screenshots/fluent_bit_2.jpeg)
+
+---
+
+### Both plugins listed:
+![HTTP Output](screenshots/fluent_bit_3.jpeg)
