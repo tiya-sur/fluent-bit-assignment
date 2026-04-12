@@ -354,7 +354,7 @@ With the server stopped, the plugin logs each failed attempt and retries `retry_
 ## Screenshots
 
 ### Stdout test showing count incrementing
-![Fluent Bit](screenshots/fluent_bit_1.png)
+![Fluent Bit](screenshots/fluent_bit_4.png)
 
 ---
 
