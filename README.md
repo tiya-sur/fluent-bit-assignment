@@ -363,5 +363,5 @@ With the server stopped, the plugin logs each failed attempt and retries `retry_
 ### Both plugins listed
 ![HTTP Output](screenshots/fluent_bit_3.png)
 
-###First-Occurrence Logic
+### First-Occurrence Logic
 ![HTTP Output](screenshots/fluent_bit_6.png)
