@@ -132,12 +132,6 @@ make -j$(nproc)
 ~/fluent-bit/build/bin/fluent-bit --list-plugins | grep -E "count_filter|batch_http"
 ```
 
-Expected:
-```
-  count_filter    Add per-level running count field to each log record
-  batch_http      Batching and alert-collapsing HTTP output
-```
-
 ### 6. Set up working directory
 
 ```bash
