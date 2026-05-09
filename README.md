@@ -347,6 +347,9 @@ With the server stopped, the plugin logs each failed attempt and retries `retry_
 
 ## Screenshots
 
+### Fluent Bit Setup
+![HTTP Output](screenshots/fluent_bit_5.png)
+
 ### Stdout test showing count incrementing
 ![Fluent Bit](screenshots/fluent_bit_4.png)
 
@@ -359,3 +362,6 @@ With the server stopped, the plugin logs each failed attempt and retries `retry_
 
 ### Both plugins listed
 ![HTTP Output](screenshots/fluent_bit_3.png)
+
+###First-Occurrence Logic
+![HTTP Output](screenshots/fluent_bit_6.png)
