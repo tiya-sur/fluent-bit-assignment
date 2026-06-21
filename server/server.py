@@ -1,3 +1,4 @@
+import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 
@@ -24,6 +25,7 @@ class LogHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
-httpd = HTTPServer(("0.0.0.0", 8080), LogHandler)
-print("[server] listening on :8080")
+port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+httpd = HTTPServer(("0.0.0.0", port), LogHandler)
+print(f"[server] listening on :{port}")
 httpd.serve_forever()
