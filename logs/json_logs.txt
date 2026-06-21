@@ -2,3 +2,4 @@
 {"time":"2026-03-21T10:15:02.456Z","level":"ERROR","file":"order_handler.py","line":88,"message":"Order reject count 13;;;downstream null"}
 {"time":"2026-03-21T10:15:03.789Z","level":"INFO","file":"engine.py","line":20,"message":"Strategy ready"}
 {"time":"2026-03-21T10:15:04.111Z","level":"ERROR","file":"network.py","line":41,"message":"Socket timeout 7"}
+{"time":"2026-03-21T10:15:05.000Z","level":"ERROR","file":"audit.py","line":15,"message":"Suspicious activity detected %%fraud_review%%;;;needs human eyes"}
