@@ -24,18 +24,16 @@ sudo apt-get update && sudo apt-get install -y \
 
 ---
 
-## Quick Setup
+## Complete Setup (7 Steps)
 
-### 1. Clone this repository
+### Step 1: Clone This Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/fluent-bit-assignment.git
+git clone https://github.com/tiya-sur/fluent-bit-assignment.git
 cd fluent-bit-assignment
 ```
 
-Your repo already has the plugin files. Now you need to clone Fluent Bit itself and integrate them.
-
-### 2. Clone Fluent Bit v4.0.3
+### Step 2: Clone Fluent Bit v4.0.3
 
 ```bash
 cd ~
@@ -44,35 +42,45 @@ cd fluent-bit
 git checkout v4.0.3
 ```
 
-### 3. Copy plugins into Fluent Bit
+### Step 3: Copy Plugins Into Fluent Bit
 
 ```bash
-cp -r ~/fluent-bit-assignment/plugins/filter_count \
-      ~/fluent-bit/plugins/
-
-cp -r ~/fluent-bit-assignment/plugins/out_batchhttp \
-      ~/fluent-bit/plugins/
+cp -r ~/fluent-bit-assignment/plugins/filter_count ~/fluent-bit/plugins/
+cp -r ~/fluent-bit-assignment/plugins/out_batchhttp ~/fluent-bit/plugins/
 ```
 
-### 4. Register plugins
+### Step 4: Register Plugins (Critical Step)
 
-Open `~/fluent-bit/plugins/CMakeLists.txt` and find this comment:
+**Open the file:**
+```bash
+nano ~/fluent-bit/plugins/CMakeLists.txt
+```
+
+**Find this line (should be line 487):**
 ```
 # Generate the header from the template
 ```
 
-Add these two lines **just before** that comment:
+**Add these TWO lines RIGHT BEFORE that comment line:**
 ```cmake
 REGISTER_FILTER_PLUGIN("filter_count")
 REGISTER_OUT_PLUGIN("out_batchhttp")
 ```
 
-### 5. Build Fluent Bit with plugins
+**Save and exit:** `Ctrl+X`, then `Y`, then `Enter`
+
+**Verify it worked:**
+```bash
+sed -n '485,490p' ~/fluent-bit/plugins/CMakeLists.txt
+```
+
+Should show your two REGISTER lines before the comment.
+
+### Step 5: Build Fluent Bit With Plugins
 
 ```bash
 cd ~/fluent-bit
-rm -rf build
-mkdir build && cd build
+rm -rf build && mkdir build && cd build
 
 cmake .. \
   -DFLB_FILTER_COUNT=On \
@@ -80,34 +88,37 @@ cmake .. \
   -DFLB_CONFIG_YAML=Off \
   -DFLB_DEBUG=On
 
-make -j$(nproc)
+make -j4
 ```
 
-**Note:** `-DFLB_CONFIG_YAML=Off` disables YAML support (not needed for this assignment).
+**Wait for build to complete (~5-10 minutes).** Should end with `[100%] Built target fluent-bit-shared`
 
-### 6. Verify plugins built correctly
+### Step 6: Verify Plugins Registered
 
 ```bash
+~/fluent-bit/build/bin/fluent-bit --version
 ~/fluent-bit/build/bin/fluent-bit --list-plugins | grep -E "count_filter|batch_http"
 ```
 
-Should show:
+**Should show:**
 ```
 count_filter   Add composite-key alert count field to each log record
 batch_http     Batching and alert-collapsing HTTP output
 ```
 
-### 7. Set up working directory
+If both appear → **Plugins built successfully!** ✅
+
+### Step 7: Set Up Working Directory
 
 ```bash
 mkdir -p ~/fluent-bit-plugin
 
-# Copy config and logs
+# Copy all config and test files
 cp ~/fluent-bit-assignment/config/* ~/fluent-bit-plugin/
 cp ~/fluent-bit-assignment/logs/* ~/fluent-bit-plugin/
 cp ~/fluent-bit-assignment/server/server.py ~/fluent-bit-plugin/
 
-# Update paths in config files (replace tiya2 with your username)
+# Update paths in config files (replace tiya2 with your actual username)
 sed -i "s|tiya2|$(whoami)|g" ~/fluent-bit-plugin/fluent-bit-stdout.conf
 sed -i "s|tiya2|$(whoami)|g" ~/fluent-bit-plugin/fluent-bit-http.conf
 sed -i "s|tiya2|$(whoami)|g" ~/fluent-bit-plugin/parsers.conf
@@ -115,51 +126,44 @@ sed -i "s|tiya2|$(whoami)|g" ~/fluent-bit-plugin/parsers.conf
 
 ---
 
-## Run the Pipeline
+## Run the Pipeline (Validation)
 
-There are two phases. **Do Phase 1 first** to validate parsing and counting before adding HTTP.
-
-### Phase 1 — Validate with Stdout (Required First)
-
-This test confirms that:
-- Log parsing works correctly
-- Count field is added correctly
-- Both log formats are handled
+### Phase 1: Stdout Validation (Do This First)
 
 ```bash
 ~/fluent-bit/build/bin/fluent-bit \
   -c ~/fluent-bit-plugin/fluent-bit-stdout.conf
 ```
 
-Run for 10 seconds, then **Ctrl+C**.
+**Run for 10 seconds, then Ctrl+C**
 
-**Expected output** (partial):
+**Expected output (partial):**
 ```json
 {"level":"ERROR","file":"risk.cpp","line":"10","count":1,"message":"Position limit exceeded"}
 {"level":"INFO","file":"engine.cpp","line":"20","count":1,"message":"Order received"}
-{"level":"ERROR","file":"risk.cpp","line":"11","count":2,"message":"Position limit exceeded again"}
-{"level":"WARNING","file":"feed.cpp","line":"30","count":1,"message":"Delayed market data"}
-{"level":"ERROR","file":"risk.cpp","line":"12","count":3,"message":"Hard breach detected"}
+{"level":"ERROR","file":"risk.cpp","line":"11","count":2,"message":"Position limit exceeded again;;;Sample Detail1"}
+{"level":"ERROR","file":"risk.cpp","line":"11","count":3,"message":"Position limit exceeded again;;;Sample Detail2"}
 ```
 
 **What to verify:**
-- ✅ Count increments per composite key (same file+line gets count 2, 3, etc.)
-- ✅ Different keys get separate counts (risk.cpp and feed.cpp have independent counts)
+- ✅ Count field present on every record
+- ✅ Same file+line gets incremented count (risk.cpp:11 goes 1→2→3)
+- ✅ Different keys get separate counts
 - ✅ No DEBUG records (grep filter removed them)
-- ✅ Both log formats parsed successfully
+- ✅ Both log formats parsed correctly
 
 ---
 
-### Phase 2 — Send to HTTP Server
+### Phase 2: HTTP Batching & Collapsing (After Phase 1 Passes)
 
-**Terminal 1 — Start the HTTP server:**
+**Terminal 1 — Start HTTP server:**
 ```bash
 python3 ~/fluent-bit-plugin/server.py
 ```
 
 You should see:
 ```
-[server] listening on :8080
+Server running on http://0.0.0.0:8080
 ```
 
 **Terminal 2 — Run Fluent Bit:**
@@ -168,26 +172,77 @@ You should see:
   -c ~/fluent-bit-plugin/fluent-bit-http.conf
 ```
 
-Run for 10 seconds, then **Ctrl+C**.
+Run for 10 seconds, then **Ctrl+C** in Terminal 2.
 
-**Expected server output** (Terminal 1):
+**Expected server output (Terminal 1):**
 ```
-============================================================
-POST /portfolio_log_analyzer/query-handle_portfolio_alerts
-============================================================
-Batch of 12 record(s):
-  [1]  level=ERROR file=risk.cpp line=10 count=1 msg=Position limit exceeded
-  [2]  level=INFO file=engine.cpp line=20 count=1 msg=Order received
-  [3]  level=ERROR file=risk.cpp line=11 count=2 msg=Position limit exceeded again;;;Sample Detail1
-  [10] level=ERROR file=order_handler.py line=88 count=2 msg=Order reject count 13;;;downstream null
-  [12] level=ERROR file=network.py line=41 count=1 msg=Socket timeout 7
+===== RECEIVED LOG =====
+[
+  {"level":"ERROR","file":"risk.cpp","line":"10","count":1,"message":"Position limit exceeded"},
+  {"level":"INFO","file":"engine.cpp","line":"20","count":1,"message":"Order received"},
+  {"level":"ERROR","file":"risk.cpp","line":"11","count":3,"message":"Position limit exceeded again;;;Sample Detail2"},
+  ...
+  {"level":"ERROR","file":"order_handler.py","line":"88","count":2,"message":"Order reject count 13;;;downstream null"},
+  {"level":"ERROR","file":"network.py","line":"41","count":1,"message":"Socket timeout 7"}
+]
 ```
 
 **What to verify:**
-- ✅ Only 1 HTTP request for 12 records (not 12 separate requests)
-- ✅ `Order reject count 12` is missing — merged into `count 13` (alert collapsing works)
-- ✅ `Order reject count 13` appears once with count=2 (first occurrence sent separately, second merged)
+- ✅ Single POST request with 12 records (not 12 separate requests)
+- ✅ `Order reject count 12;;;Detail1` is **missing** — merged into count 13
+- ✅ `Order reject count 13;;;Detail2` present with count=2 (first occurrence sent separately, second merged)
 - ✅ All original fields preserved unchanged
+- ✅ Payload is a plain JSON array
+
+---
+
+## How the Plugins Work
+
+### filter_count Plugin
+
+**Adds a `count` field to every record based on composite alert key.**
+
+Key format: `severity|cleaned_alert_brief|file|line`
+
+Example:
+- `ERROR|order reject count|order_handler.py|88`
+
+The `cleaned_alert_brief` is extracted from message by:
+1. Take text before `;;;`
+2. Strip hex addresses (`0x...`)
+3. Strip digits
+4. Strip `...check the file:` suffix
+5. Collapse whitespace, lowercase
+
+Two records with same key share the same counter — this matches the merge logic in the output plugin.
+
+### batch_http Output Plugin
+
+**Batches records and collapses duplicate alerts.**
+
+**First Occurrence Rule:**
+- When alert key seen for first time → send immediately as `[{...}]`
+- Preserves original alert creation timestamp on server
+
+**Subsequent Occurrences:**
+- Buffer in memory
+- Collapse: same key = latest record wins
+- Flush when: count reaches 200 OR 2 seconds elapsed
+
+**Configuration:**
+```ini
+[OUTPUT]
+    Name              batch_http
+    Match             *
+    Host              127.0.0.1
+    Port              8080
+    path              /portfolio_log_analyzer/query-handle_portfolio_alerts
+    batch_size        200
+    batch_timeout_sec 2
+    collapse_alerts   true
+    retry_limit       3
+    retry_delay_sec   1
+```
 
 ---
 
@@ -372,3 +427,6 @@ The `seen_keys` set in the output plugin persists for the entire Fluent Bit run.
 ## Questions?
 
 Check the `config/` files for documentation on each parser and filter.
+
+
+
