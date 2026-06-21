@@ -1,76 +1,20 @@
-# Fluent Bit Custom Plugin Assignment
+# Fluent Bit Custom C Plugin Assignment
 
-## Overview
+## What This Is
 
-This project implements a complete Fluent Bit pipeline with two custom plugins written in C, built and linked directly into the Fluent Bit process. There is no separate middleware process — all batching, collapsing, and filtering logic runs inside Fluent Bit as native C plugins.
+This repository contains a **complete, working Fluent Bit log pipeline** with two custom C plugins built directly into Fluent Bit. Everything runs in a single process — no separate middleware.
 
-**One-line summary:** Source-style log records are read from file, parsed into structured fields, enriched with a per-level count, then sent as fewer larger JSON-array HTTP requests — with same-key alerts collapsed to their latest version before sending.
-
----
-
-## Architecture
-
-```
-logs.txt      ──► [INPUT] tail ──► custom_parser
-                                        │
-json_logs.txt ──► [INPUT] tail ──► json_parser
-                                        │
-                                        ▼
-                              [FILTER] grep          ← config-only: drops DEBUG
-                                        │
-                                        ▼
-                              [FILTER] count_filter  ← C plugin: adds count field
-                                        │
-                                        ▼
-                              [OUTPUT] batch_http    ← C plugin: batches + collapses
-                                        │
-                                        ▼
-                               server.py             ← Python HTTP receiver
-```
-
-### Fluent Bit Pipeline Concepts
-
-Fluent Bit processes logs through four stages:
-
-- **Input** — reads raw data from a source (file, socket, etc.) and emits records tagged with a routing key
-- **Parser** — converts raw text lines into structured key-value maps; runs inside the input plugin
-- **Filter** — transforms or enriches records in-flight; can add fields, drop records, or route based on content
-- **Output** — delivers the final records to a destination (stdout, HTTP, file, etc.)
-
-Tags control routing. Each input assigns a tag (e.g. `mylogs`, `jsonlogs`) and filters/outputs use `Match` patterns to select which tagged records to process.
-
-**No middleware.py. No separate process. Everything runs inside Fluent Bit.**
+**The pipeline:**
+1. Reads logs from files (two different formats)
+2. Parses them into structured records
+3. Filters out DEBUG level
+4. Adds a per-alert count field (filter plugin)
+5. Batches records and collapses duplicate alerts (output plugin)
+6. Sends as JSON arrays via HTTP
 
 ---
 
-## Repository Structure
-
-```
-fluent-bit-assignment/
-├── plugins/
-│   ├── filter_count/
-│   │   ├── filter_count.c       # Doc 1: per-level log counter filter plugin
-│   │   └── CMakeLists.txt
-│   └── out_batchhttp/
-│       ├── out_batchhttp.c      # Doc 2: batching + alert collapsing output plugin
-│       └── CMakeLists.txt
-├── config/
-│   ├── parsers.conf             # Two parsers: custom regex + JSON
-│   ├── fluent-bit-stdout.conf   # Phase 5: stdout validation config
-│   └── fluent-bit-http.conf     # Phase 7: HTTP output config
-├── logs/
-│   ├── logs.txt                 # Sample logs in custom trading format
-│   └── json_logs.txt            # Sample logs in JSON format
-├── server/
-│   └── server.py                # Simple Python HTTP receiver
-└── README.md
-```
-
----
-
-## Prerequisites
-
-Ubuntu / WSL:
+## What You Need (Ubuntu/WSL)
 
 ```bash
 sudo apt-get update && sudo apt-get install -y \
@@ -80,288 +24,351 @@ sudo apt-get update && sudo apt-get install -y \
 
 ---
 
-## Setup and Build
+## Quick Setup
 
-### 1. Clone Fluent Bit source
+### 1. Clone this repository
+
+```bash
+git clone https://github.com/YOUR_USERNAME/fluent-bit-assignment.git
+cd fluent-bit-assignment
+```
+
+Your repo already has the plugin files. Now you need to clone Fluent Bit itself and integrate them.
+
+### 2. Clone Fluent Bit v4.0.3
 
 ```bash
 cd ~
 git clone https://github.com/fluent/fluent-bit.git
 cd fluent-bit
-git checkout v3.2.4
+git checkout v4.0.3
 ```
 
-### 2. Clone this repository and copy plugins
+### 3. Copy plugins into Fluent Bit
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/fluent-bit-assignment.git
-cd fluent-bit-assignment
+cp -r ~/fluent-bit-assignment/plugins/filter_count \
+      ~/fluent-bit/plugins/
 
-cp -r plugins/filter_count  ~/fluent-bit/plugins/filter_count
-cp -r plugins/out_batchhttp ~/fluent-bit/plugins/out_batchhttp
+cp -r ~/fluent-bit-assignment/plugins/out_batchhttp \
+      ~/fluent-bit/plugins/
 ```
 
-### 3. Register plugins with Fluent Bit's build system
+### 4. Register plugins
 
-Open `~/fluent-bit/plugins/CMakeLists.txt` and add these two lines just before the comment `# Generate the header from the template`:
+Open `~/fluent-bit/plugins/CMakeLists.txt` and find this comment:
+```
+# Generate the header from the template
+```
 
+Add these two lines **just before** that comment:
 ```cmake
 REGISTER_FILTER_PLUGIN("filter_count")
 REGISTER_OUT_PLUGIN("out_batchhttp")
 ```
 
-### 4. Build
+### 5. Build Fluent Bit with plugins
 
 ```bash
 cd ~/fluent-bit
-mkdir -p build && cd build
+rm -rf build
+mkdir build && cd build
 
 cmake .. \
   -DFLB_FILTER_COUNT=On \
   -DFLB_OUT_BATCHHTTP=On \
-  -DFLB_BATCHHTTP=On \
-  -DFLB_OUT_BATCH_HTTP=On \
+  -DFLB_CONFIG_YAML=Off \
   -DFLB_DEBUG=On
 
 make -j$(nproc)
 ```
 
-### 5. Verify plugins are registered
+**Note:** `-DFLB_CONFIG_YAML=Off` disables YAML support (not needed for this assignment).
+
+### 6. Verify plugins built correctly
 
 ```bash
 ~/fluent-bit/build/bin/fluent-bit --list-plugins | grep -E "count_filter|batch_http"
 ```
 
-### 6. Set up working directory
+Should show:
+```
+count_filter   Add composite-key alert count field to each log record
+batch_http     Batching and alert-collapsing HTTP output
+```
+
+### 7. Set up working directory
 
 ```bash
 mkdir -p ~/fluent-bit-plugin
 
-sed -i "s|tiya2|$(whoami)|g" config/fluent-bit-stdout.conf
-sed -i "s|tiya2|$(whoami)|g" config/fluent-bit-http.conf
-sed -i "s|tiya2|$(whoami)|g" config/parsers.conf
+# Copy config and logs
+cp ~/fluent-bit-assignment/config/* ~/fluent-bit-plugin/
+cp ~/fluent-bit-assignment/logs/* ~/fluent-bit-plugin/
+cp ~/fluent-bit-assignment/server/server.py ~/fluent-bit-plugin/
 
-cp config/* ~/fluent-bit-plugin/
-cp logs/*   ~/fluent-bit-plugin/
-cp server/server.py ~/fluent-bit-plugin/
+# Update paths in config files (replace tiya2 with your username)
+sed -i "s|tiya2|$(whoami)|g" ~/fluent-bit-plugin/fluent-bit-stdout.conf
+sed -i "s|tiya2|$(whoami)|g" ~/fluent-bit-plugin/fluent-bit-http.conf
+sed -i "s|tiya2|$(whoami)|g" ~/fluent-bit-plugin/parsers.conf
 ```
 
 ---
 
-## Running the Pipeline
+## Run the Pipeline
 
-### Phase 5 — Validate with stdout first (mandatory)
+There are two phases. **Do Phase 1 first** to validate parsing and counting before adding HTTP.
 
-This step must be done before HTTP. It confirms parsing and counting are correct before adding any network complexity.
+### Phase 1 — Validate with Stdout (Required First)
+
+This test confirms that:
+- Log parsing works correctly
+- Count field is added correctly
+- Both log formats are handled
 
 ```bash
 ~/fluent-bit/build/bin/fluent-bit \
   -c ~/fluent-bit-plugin/fluent-bit-stdout.conf
 ```
 
-Expected output:
+Run for 10 seconds, then **Ctrl+C**.
 
+**Expected output** (partial):
 ```json
-{"level":"ERROR","file":"risk.cpp","line":"10","message":"Position limit exceeded","count":1}
-{"level":"INFO","file":"engine.cpp","line":"20","message":"Order received","count":1}
-{"level":"ERROR","file":"risk.cpp","line":"11","message":"Position limit exceeded again","count":2}
-{"level":"WARNING","file":"feed.cpp","line":"30","message":"Delayed market data","count":1}
-{"level":"ERROR","file":"risk.cpp","line":"12","message":"Hard breach detected","count":3}
-{"level":"INFO","file":"engine.cpp","line":"21","message":"Order filled","count":2}
-{"level":"CRITICAL","file":"monitor.cpp","line":"5","message":"System overload","count":1}
+{"level":"ERROR","file":"risk.cpp","line":"10","count":1,"message":"Position limit exceeded"}
+{"level":"INFO","file":"engine.cpp","line":"20","count":1,"message":"Order received"}
+{"level":"ERROR","file":"risk.cpp","line":"11","count":2,"message":"Position limit exceeded again"}
+{"level":"WARNING","file":"feed.cpp","line":"30","count":1,"message":"Delayed market data"}
+{"level":"ERROR","file":"risk.cpp","line":"12","count":3,"message":"Hard breach detected"}
 ```
 
-What this proves:
-- Parsing extracts all five fields correctly from both log formats
-- `count` increments independently per level — ERROR reaches 3, INFO reaches 2
-- DEBUG records are absent — config-level grep filter dropped them
-- Both log formats (custom regex + JSON) produce correctly enriched records
+**What to verify:**
+- ✅ Count increments per composite key (same file+line gets count 2, 3, etc.)
+- ✅ Different keys get separate counts (risk.cpp and feed.cpp have independent counts)
+- ✅ No DEBUG records (grep filter removed them)
+- ✅ Both log formats parsed successfully
 
-Press `Ctrl+C` when done.
+---
 
-### Phase 7 — Send to HTTP server
+### Phase 2 — Send to HTTP Server
 
-**Terminal 1:**
+**Terminal 1 — Start the HTTP server:**
 ```bash
 python3 ~/fluent-bit-plugin/server.py
 ```
 
-**Terminal 2:**
+You should see:
+```
+[server] listening on :8080
+```
+
+**Terminal 2 — Run Fluent Bit:**
 ```bash
 ~/fluent-bit/build/bin/fluent-bit \
   -c ~/fluent-bit-plugin/fluent-bit-http.conf
 ```
 
-Expected server output:
+Run for 10 seconds, then **Ctrl+C**.
 
+**Expected server output** (Terminal 1):
 ```
 ============================================================
 POST /portfolio_log_analyzer/query-handle_portfolio_alerts
 ============================================================
 Batch of 12 record(s):
-  [1]  level=ERROR    file=risk.cpp          line=10  count=1  msg=Position limit exceeded
-  [2]  level=INFO     file=engine.cpp        line=20  count=1  msg=Order received
-  [3]  level=ERROR    file=risk.cpp          line=11  count=2  msg=Position limit exceeded again
-  [4]  level=WARNING  file=feed.cpp          line=30  count=1  msg=Delayed market data
-  [5]  level=ERROR    file=risk.cpp          line=12  count=3  msg=Hard breach detected
-  [6]  level=INFO     file=engine.cpp        line=21  count=2  msg=Order filled
-  [7]  level=CRITICAL file=monitor.cpp       line=5   count=1  msg=System overload
-  [8]  level=ERROR    file=risk.cpp          line=20  count=4  msg=New breach detected
-  [9]  level=INFO     file=engine.cpp        line=30  count=3  msg=Recovery started
-  [10] level=ERROR    file=order_handler.py  line=88  count=6  msg=Order reject count 13
-  [11] level=INFO     file=engine.py         line=20  count=4  msg=Strategy ready
-  [12] level=ERROR    file=network.py        line=41  count=7  msg=Socket timeout 7
+  [1]  level=ERROR file=risk.cpp line=10 count=1 msg=Position limit exceeded
+  [2]  level=INFO file=engine.cpp line=20 count=1 msg=Order received
+  [3]  level=ERROR file=risk.cpp line=11 count=2 msg=Position limit exceeded again;;;Sample Detail1
+  [10] level=ERROR file=order_handler.py line=88 count=2 msg=Order reject count 13;;;downstream null
+  [12] level=ERROR file=network.py line=41 count=1 msg=Socket timeout 7
 ```
 
-What this proves:
-- 12 records arrived in **1 HTTP request** instead of 12 separate requests — request count reduced
-- `Order reject count 12` is absent — collapsed into `count 13` using composite alert key — payload object count reduced
-- All original field names and values are preserved unchanged
-- Payload is a plain JSON array — no wrapper object added
+**What to verify:**
+- ✅ Only 1 HTTP request for 12 records (not 12 separate requests)
+- ✅ `Order reject count 12` is missing — merged into `count 13` (alert collapsing works)
+- ✅ `Order reject count 13` appears once with count=2 (first occurrence sent separately, second merged)
+- ✅ All original fields preserved unchanged
 
 ---
 
-## Design Note
+## Understanding the Plugins
 
-### How the parsers work
+### filter_count Plugin
 
-`custom_parser` uses a regex to extract five fields from trading-style log lines:
+**What it does:**
+- Adds a `count` field to every record
+- The count is per **composite alert key**: `severity|cleaned_alert_brief|file|line`
+  - Same file+line = same count
+  - Different file or line = separate count
+- This is the **same key used for collapsing** in the output plugin
 
-```
-2026-03-21 10:15:01,123 : ERROR : [risk.cpp : 10] : Position limit exceeded
-```
-
-Fields extracted: `time`, `level`, `file`, `line`, `message`.
-
-`json_parser` uses Fluent Bit's built-in JSON decoder for structured log files where each line is a self-contained JSON object with the same fields. Two parsers demonstrate that the same downstream plugin works regardless of log source format — a realistic requirement when multiple services log differently.
-
-### What the filter plugin receives
-
-Each record arrives in `cb_filter` as a MessagePack buffer. Records are encoded as two-element arrays: `[timestamp, {field: value, ...}]`. The plugin iterates through the buffer record by record, decodes each map, guards every key access with a type check (`MSGPACK_OBJECT_STR`) before calling `strncmp` to avoid segfaults on non-string keys, then re-encodes the map with the `count` field appended.
-
-### How the filter plugin maintains counters
-
-Counters live in a `struct count_ctx` allocated per plugin instance in `cb_init` and freed in `cb_exit`. Levels supported: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Any missing or unrecognised level maps to `UNKNOWN` and still gets counted. Using a context struct (not global variables) means multiple filter instances never share or corrupt each other's state.
-
-### Bonus feature — configurable output key (Phase 8)
-
-The field name added to each record defaults to `count` but is configurable via the `output_key` property:
-
+**Configuration:**
 ```ini
 [FILTER]
     Name        count_filter
     Match       *
-    output_key  level_count
+    output_key  count
 ```
 
-### Why stdout was tested first
-
-Stdout validation confirms that parsing extracts the right fields and counting increments correctly before adding any HTTP layer. A bug in parsing shows up immediately as a missing field in the terminal. This is the correct debugging discipline — validate each stage in isolation before connecting the next one.
-
-### How the final payload reaches the HTTP receiver
-
-Fluent Bit calls `cb_flush` on the output plugin whenever it has buffered records ready to deliver. The plugin adds each incoming record to an in-memory array. When a flush condition is met (count or timeout), the buffer is serialized as a JSON array and sent in a single HTTP POST to `server.py`. The server prints each batch and responds HTTP 200.
-
-### Where config alone was enough vs where a plugin was needed
-
-The `grep` filter in config was enough to drop DEBUG records (Phase 3) — a simple field match needs no custom code.
-
-A plugin was needed for stateful per-level counting (Phase 4) because Fluent Bit has no built-in mechanism for maintaining running counters across records. A plugin was also needed for batching and alert collapsing (Doc 2) because these require in-process memory state, timeout tracking, composite key normalisation logic, and HTTP client calls — none of which can be expressed in Fluent Bit config.
-
 ---
 
-## Flush Logic
+### batch_http Output Plugin
 
-The output plugin flushes the buffer when either condition is met:
+**What it does:**
+1. **First occurrence rule:** When a new alert key appears for the first time, send it immediately as `[{...}]` to preserve creation timestamp
+2. **Subsequent occurrences:** Merge same-key records (latest wins), buffer them, and send in batches
+3. **Flush conditions:**
+   - When 200 records buffered (count threshold)
+   - After 2 seconds with no new records (timeout threshold)
+4. **Alert collapsing:** Two records with the same composite key become one (latest version only)
 
-1. **Count threshold** — buffered record count reaches `batch_size` (default 200). If 200 records arrive quickly, the plugin flushes immediately without waiting for the timer.
-
-2. **Timeout threshold** — the oldest buffered record has been waiting longer than `batch_timeout_sec` (default 2 seconds). If only a few records arrive and no more come, the plugin flushes after the timeout so records are never stuck indefinitely.
-
-Both conditions are checked inside `cb_flush` after every record is added to the buffer. On shutdown, `cb_exit` performs a final flush of any remaining buffered records before freeing memory.
-
-If snapshot collapsing is enabled, the plugin may receive 200 raw records but send fewer than 200 JSON objects because same-key records were merged before the flush.
-
----
-
-## Failure Handling
-
-If the HTTP send fails:
-
-- The failure is logged with attempt number, target URL, and error reason
-- The plugin retries up to `retry_limit` times with `retry_delay_sec` seconds between attempts
-- After exhausting all retries, the batch is logged as dropped and the buffer is cleared so the plugin can continue processing new records
-- Fluent Bit never crashes or hangs on network failure
-
-On shutdown with buffered records, `cb_exit` attempts one final flush. If the server is still unavailable, the drop is logged explicitly so nothing is silently lost.
-
----
-
-## Plugin Configuration Reference
-
-### filter_count
-
-| Property | Default | Description |
-|---|---|---|
-| `output_key` | `count` | Name of the field added to each record |
-
-### batch_http (out_batchhttp)
-
-| Property | Default | Description |
-|---|---|---|
-| `host` | `127.0.0.1` | HTTP server hostname |
-| `port` | `8080` | HTTP server port |
-| `path` | `/` | HTTP request URI path |
-| `batch_size` | `200` | Flush when buffer reaches this many records |
-| `batch_timeout_sec` | `2` | Flush when oldest buffered record exceeds this age in seconds |
-| `collapse_alerts` | `false` | Enable alert collapsing by composite key |
-| `retry_limit` | `3` | Number of retries on HTTP send failure |
-| `retry_delay_sec` | `1` | Seconds to wait between retry attempts |
-
----
-
-## Test Cases
-
-### Test 1 — Timeout flush
-Set `batch_size 200`, `batch_timeout_sec 2`. Send only 2 records. After ~2 seconds exactly 1 HTTP request arrives containing those 2 records. Plugin did not wait for 200 records.
-
-### Test 2 — Count flush
-Set `batch_size 5`, `batch_timeout_sec 10`. Send 5 records quickly. Plugin flushes immediately on reaching the count threshold without waiting for the 10 second timeout.
-
-### Test 3 — Alert collapsing by composite key
-With `collapse_alerts true`, send:
-```json
-{"message":"Order reject count 12","level":"ERROR","file":"order_handler.py","line":88}
-{"message":"Order reject count 13","level":"ERROR","file":"order_handler.py","line":88}
-{"message":"Socket timeout 7","level":"ERROR","file":"network.py","line":41}
+**Configuration:**
+```ini
+[OUTPUT]
+    Name              batch_http
+    Match             *
+    Host              127.0.0.1
+    Port              8080
+    path              /portfolio_log_analyzer/query-handle_portfolio_alerts
+    batch_size        200
+    batch_timeout_sec 2
+    collapse_alerts   true
+    retry_limit       3
+    retry_delay_sec   1
 ```
-Server receives 2 records not 3. `Order reject count 12` is gone — both order records share the same composite key (`ERROR|order reject count|order_handler.py|88`) after digit stripping, so only the latest survives. `Socket timeout 7` has a different key and is kept separately.
 
-### Test 4 — Field preservation
-All original fields (`message`, `level`, `file`, `line`, `timestamp`, `source_file`) are present in the output with original values unchanged. No wrapper object added. No field renamed.
+---
 
-### Test 5 — Failure handling
-With the server stopped, the plugin logs each failed attempt and retries `retry_limit` times. After exhausting retries it logs the drop clearly. Fluent Bit does not crash or hang.
+## Repository Structure
+
+```
+fluent-bit-assignment/
+├── plugins/
+│   ├── filter_count/           ← Plugin 1: adds count field
+│   │   ├── filter_count.c
+│   │   └── CMakeLists.txt
+│   └── out_batchhttp/          ← Plugin 2: batches + collapses
+│       ├── out_batchhttp.c
+│       └── CMakeLists.txt
+├── config/
+│   ├── fluent-bit-stdout.conf  ← Phase 1: validates parsing
+│   ├── fluent-bit-http.conf    ← Phase 2: HTTP output
+│   └── parsers.conf            ← Defines two log formats
+├── logs/
+│   ├── logs.txt                ← Custom trading format logs
+│   └── json_logs.txt           ← JSON format logs
+├── server/
+│   └── server.py               ← Python HTTP receiver
+├── screenshots/                ← Test results
+├── README.md
+└── .gitignore
+```
+
+---
+
+## Troubleshooting
+
+### CMake fails with YAML error
+
+```
+CMake Error: YAML development dependencies required
+```
+
+**Solution:** Add `-DFLB_CONFIG_YAML=Off` to cmake command (already shown above).
+
+### Plugins not listed after build
+
+```bash
+~/fluent-bit/build/bin/fluent-bit --list-plugins | grep -E "count_filter|batch_http"
+```
+
+Returns nothing? Check:
+1. Did you add `REGISTER_FILTER_PLUGIN` and `REGISTER_OUT_PLUGIN` lines to `~/fluent-bit/plugins/CMakeLists.txt`?
+2. Did you run `make clean` or `rm -rf build` before rebuilding after editing CMakeLists.txt?
+
+### No output in Phase 1
+
+If you see no JSON lines:
+1. Check if `logs.txt` exists: `ls -la ~/fluent-bit-plugin/logs.txt`
+2. Check if config file has correct paths: `grep "home/" ~/fluent-bit-plugin/fluent-bit-stdout.conf`
+3. Run with verbose logging: `~/fluent-bit/build/bin/fluent-bit -v -c ~/fluent-bit-plugin/fluent-bit-stdout.conf`
+
+### HTTP server not receiving data
+
+1. Is Python server running in Terminal 1? Should show `[server] listening on :8080`
+2. Check if logs are being generated: `tail -f ~/fluent-bit-plugin/logs.txt`
+3. Check Fluent Bit for errors in Terminal 2 output
+
+---
+
+## How Plugins Integrate
+
+The two plugins are standard Fluent Bit plugins:
+
+1. **Compile:** Written in C, compiled as part of Fluent Bit's build
+2. **Register:** Plugin struct registered with CMake macros
+3. **Load:** Fluent Bit loads them on startup
+4. **Run:** Called for every record passing through the pipeline
+5. **State:** Plugins maintain in-process memory (counters, seen keys, buffers)
+
+No external processes. No IPC. No performance overhead. Everything runs in a single Fluent Bit process.
 
 ---
 
 ## Screenshots
 
-### Fluent Bit Setup
-![HTTP Output](screenshots/fluent_bit_5.png)
-
-### Stdout test showing count incrementing
-![Fluent Bit](screenshots/fluent_bit_4.png)
-
----
-
-### HTTP test showing batch + collapsing 
-![Stdout Output](screenshots/fluent_bit_2.png)
+See `screenshots/` directory for:
+- `fluent_bit_1.png` — Fluent Bit v4.0.3 version info
+- `fluent_bit_2.png` — Phase 1 stdout test (count incrementing)
+- `fluent_bit_3.png` — Phase 2 HTTP batching output
+- `fluent_bit_4.png` — Both plugins listed by `--list-plugins`
+- `fluent_bit_5.png` — First-occurrence logic (separate sends then merged batch)
+- `fluent_bit_6.png` — HTTP server receiving batches
 
 ---
 
-### Both plugins listed
-![HTTP Output](screenshots/fluent_bit_3.png)
+## Design Details
 
-### First-Occurrence Logic
-![HTTP Output](screenshots/fluent_bit_6.png)
+### Why Two Plugins?
+
+**filter_count** is a filter because it's stateless per record — it just reads fields and appends a count.
+
+**batch_http** is an output because it needs to:
+- Buffer records across multiple flushes
+- Track seen alert keys (per-run state)
+- Maintain HTTP connection
+- Implement retry logic
+
+Fluent Bit's filter and output plugin interfaces are designed for exactly these use cases.
+
+### Composite Alert Key
+
+The key format: `severity|cleaned_alert_brief|file|line`
+
+Example:
+- `ERROR|order reject count|order_handler.py|88`
+
+The `cleaned_alert_brief` is derived from the message field by:
+1. Extract text before `;;;`
+2. Strip hex addresses (`0x...`)
+3. Strip digits
+4. Strip `...check the file:` suffix
+5. Collapse whitespace, lowercase
+
+This ensures that messages like:
+- `Order reject count 12;;;detail`
+- `Order reject count 13;;;detail`
+
+...both map to the same key after digit stripping, so they collapse to one record.
+
+### Per-Run Tracking
+
+The `seen_keys` set in the output plugin persists for the entire Fluent Bit run. If you stop and restart Fluent Bit, the set resets. This ensures:
+- First occurrence is always sent separately (creation time preserved)
+- Subsequent occurrences in future batches are still merged
+
+---
+
+## Questions?
+
+Check the `config/` files for documentation on each parser and filter.
