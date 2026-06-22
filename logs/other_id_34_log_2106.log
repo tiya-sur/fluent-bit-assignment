@@ -1,0 +1,3 @@
+2026-03-21 10:17:01,100 : INFO : [strategy.cpp : 11] : Order book sync complete
+2026-03-21 10:17:01,200 : ERROR : [strategy.cpp : 34] : Slippage above tolerance ;;;check the file: strategy.cpp
+2026-03-21 10:17:01,300 : CRITICAL : [execution.cpp : 19] : Trade rejected by exchange
