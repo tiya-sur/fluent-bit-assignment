@@ -1,0 +1,4 @@
+2026-03-21 10:16:01,100 : INFO : [portfolio.cpp : 42] : Strategy allocation started
+2026-03-21 10:16:01,200 : WARNING : [portfolio.cpp : 57] : Drawdown threshold approaching
+2026-03-21 10:16:01,300 : ERROR : [risk.cpp : 88] : Max exposure exceeded for instrument
+2026-03-21 10:16:01,400 : CRITICAL : [risk.cpp : 91] : Position liquidation triggered %%compliance_flag%%
