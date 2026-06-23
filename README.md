@@ -5,12 +5,14 @@
 This repository contains a **complete, working Fluent Bit log pipeline** with two custom C plugins built directly into Fluent Bit. Everything runs in a single process — no separate middleware.
 
 **The pipeline:**
-1. Reads logs from files (two different formats)
+1. Reads logs from files (multiple formats, including ID-bearing *.log files)
 2. Parses them into structured records
 3. Filters out DEBUG level
-4. Adds a per-alert count field (filter plugin)
-5. Batches records and collapses duplicate alerts (output plugin)
-6. Sends as JSON arrays via HTTP
+4. Extracts strategy ID (strat_id) from log filenames via configurable regex
+5. Adds a per-alert count field (filter plugin)
+6. Routes %%marker%% alerts to a separate HTTP endpoint
+7. Batches records and collapses duplicate alerts (output plugin)
+8. Sends as JSON arrays via HTTP
 
 ---
 
