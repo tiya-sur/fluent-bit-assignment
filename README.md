@@ -48,6 +48,7 @@ git checkout v4.0.3
 
 ```bash
 cp -r ~/fluent-bit-assignment/plugins/filter_count ~/fluent-bit/plugins/
+cp -r ~/fluent-bit-assignment/plugins/filter_extract_id ~/fluent-bit/plugins/
 cp -r ~/fluent-bit-assignment/plugins/out_batchhttp ~/fluent-bit/plugins/
 ```
 
@@ -66,6 +67,7 @@ nano ~/fluent-bit/plugins/CMakeLists.txt
 **Add these TWO lines RIGHT BEFORE that comment line:**
 ```cmake
 REGISTER_FILTER_PLUGIN("filter_count")
+REGISTER_FILTER_PLUGIN("filter_extract_id")
 REGISTER_OUT_PLUGIN("out_batchhttp")
 ```
 
@@ -86,6 +88,7 @@ rm -rf build && mkdir build && cd build
 
 cmake .. \
   -DFLB_FILTER_COUNT=On \
+  -DFLB_FILTER_EXTRACT_ID=On \
   -DFLB_OUT_BATCHHTTP=On \
   -DFLB_CONFIG_YAML=Off \
   -DFLB_DEBUG=On
@@ -167,11 +170,19 @@ You should see:
 ```
 Server running on http://0.0.0.0:8080
 ```
+**Terminal 2 — special alerts (%%marker%% records):**
+```bash
+ python3 ~/fluent-bit-plugin/server.py 8081
+```
 
-**Terminal 2 — Run Fluent Bit:**
+**Terminal 3— Run Fluent Bit:**
 ```bash
 ~/fluent-bit/build/bin/fluent-bit \
   -c ~/fluent-bit-plugin/fluent-bit-http.conf
+```
+
+
+
 ```
 
 Run for 10 seconds, then **Ctrl+C** in Terminal 2.
@@ -305,8 +316,9 @@ fluent-bit-assignment/
 │   │   ├── filter_count.c
 │   │   └── CMakeLists.txt
 │   └── out_batchhttp/          ← Plugin 2: batches + collapses
-│       ├── out_batchhttp.c
-│       └── CMakeLists.txt
+│   |    ├── out_batchhttp.c
+│   |   └── CMakeLists.txt
+|   |   ├── filter_extract_id/      ← Plugin 3: extracts strat_id from filename
 ├── config/
 │   ├── fluent-bit-stdout.conf  ← Phase 1: validates parsing
 │   ├── fluent-bit-http.conf    ← Phase 2: HTTP output
@@ -314,6 +326,8 @@ fluent-bit-assignment/
 ├── logs/
 │   ├── logs.txt                ← Custom trading format logs
 │   └── json_logs.txt           ← JSON format logs
+│   ├── sample_log_25_21062026.log   ← ID-bearing log (strat_id=25)
+│   └── other_id_34_log_2106.log     ← ID-bearing log (strat_id=34)
 ├── server/
 │   └── server.py               ← Python HTTP receiver
 ├── screenshots/                ← Test results
