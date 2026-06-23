@@ -1,4 +1,3 @@
-
 #include <fluent-bit/flb_filter_plugin.h>
 #include <fluent-bit/flb_mem.h>
 #include <fluent-bit/flb_log.h>
@@ -31,8 +30,8 @@ static int cb_init(struct flb_filter_instance *f_ins,
 
     output_key   = flb_filter_get_property("output_key",   f_ins);
     filename_key = flb_filter_get_property("filename_key", f_ins);
-    ctx->output_key   = flb_strdup(output_key   ? output_key   : "strat_id");
-    ctx->filename_key = flb_strdup(filename_key ? filename_key : "source_file");
+    ctx->output_key   = strdup(output_key   ? output_key   : "strat_id");
+    ctx->filename_key = strdup(filename_key ? filename_key : "source_file");
 
     if (regcomp(&ctx->regex, pattern, REG_EXTENDED) != 0) {
         flb_error("[extract_id] failed to compile regex: %s", pattern);
@@ -166,4 +165,3 @@ struct flb_filter_plugin filter_extract_id_plugin = {
     .cb_exit     = cb_exit,
     .flags       = 0
 };
-PLUGIN_EOF
